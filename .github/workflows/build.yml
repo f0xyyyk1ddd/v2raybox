@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Build with Make
       run: make
@@ -23,7 +23,7 @@ jobs:
         zip -r v2raybox.zip v2raybox.app
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: v2raybox-macos
         path: v2raybox.zip
