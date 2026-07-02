@@ -4,14 +4,15 @@ import Cocoa
 class VPNManager {
     static let shared = VPNManager()
 
-    private let plistPath = "/Library/LaunchDaemons/com.v2raybox.singbox.plist"
-    private let configPath = "/tmp/v2raybox_config.json"
+    private let configPath   = "/tmp/v2raybox_config.json"
+    private let tmpPlistPath = "/tmp/com.v2raybox.singbox.plist"
+    private let sysPlistPath = "/Library/LaunchDaemons/com.v2raybox.singbox.plist"
 
     private func generateConfig(for profile: Profile) -> String {
-        var outboundJson = ""
+        var outbound = ""
         switch profile.protocolName {
         case "vless":
-            outboundJson = """
+            outbound = """
             {
                 "type": "vless", "tag": "proxy",
                 "server": "\(profile.address)",
@@ -21,7 +22,7 @@ class VPNManager {
             }
             """
         case "trojan":
-            outboundJson = """
+            outbound = """
             {
                 "type": "trojan", "tag": "proxy",
                 "server": "\(profile.address)",
@@ -30,8 +31,8 @@ class VPNManager {
                 "tls": { "enabled": true, "server_name": "\(profile.sni ?? profile.address)" }
             }
             """
-        default: // hysteria, hysteria2
-            outboundJson = """
+        default:
+            outbound = """
             {
                 "type": "\(profile.protocolName)", "tag": "proxy",
                 "server": "\(profile.address)",
@@ -42,13 +43,10 @@ class VPNManager {
             }
             """
         }
-
         return """
         {
             "log": { "level": "info" },
-            "dns": {
-                "servers": [{ "address": "8.8.8.8", "detour": "direct" }]
-            },
+            "dns": { "servers": [{ "address": "8.8.8.8", "detour": "direct" }] },
             "inbounds": [{
                 "type": "tun", "tag": "tun-in",
                 "interface_name": "utun233",
@@ -57,7 +55,7 @@ class VPNManager {
                 "stack": "system", "sniff": true
             }],
             "outbounds": [
-                \(outboundJson),
+                \(outbound),
                 { "type": "direct", "tag": "direct" }
             ],
             "route": {
@@ -98,49 +96,47 @@ class VPNManager {
 
     func startVPN(profile: Profile) {
         guard let corePath = Bundle.main.path(forResource: "sing-box", ofType: nil) else {
-            showAlert("Ядро sing-box не найдено в пакете приложения!")
-            return
+            showAlert("sing-box не найден в пакете!\nПуть: \(Bundle.main.bundlePath)"); return
         }
 
-        // Записываем конфиг
-        try? generateConfig(for: profile).write(toFile: configPath, atomically: true, encoding: .utf8)
+        // Swift пишет файлы в /tmp — никаких прав root не нужно
+        do {
+            try generateConfig(for: profile).write(toFile: configPath, atomically: true, encoding: .utf8)
+            try generatePlist(corePath: corePath).write(toFile: tmpPlistPath, atomically: true, encoding: .utf8)
+        } catch {
+            showAlert("Ошибка записи файлов: \(error)"); return
+        }
 
-        // Формируем содержимое plist
-        let plistContent = generatePlist(corePath: corePath)
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-
-        // Один AppleScript делает всё:
-        // 1. Снимает карантин и выдаёт права на исполнение
-        // 2. Пишет plist в LaunchDaemons
-        // 3. Выгружает старый (если был) и загружает новый
+        // AppleScript выполняет ТОЛЬКО простые команды — никакого экранирования!
         let script = """
-        do shell script "xattr -cr '\(corePath)'; chmod +x '\(corePath)'; printf '%s' \\"\(plistContent)\\" > '\(plistPath)'; launchctl unload '\(plistPath)' 2>/dev/null; launchctl load '\(plistPath)'" with administrator privileges
+        do shell script "xattr -cr '\(corePath)' && chmod +x '\(corePath)' && launchctl unload '\(sysPlistPath)' 2>/dev/null; cp '\(tmpPlistPath)' '\(sysPlistPath)' && launchctl load '\(sysPlistPath)'" with administrator privileges
         """
-
-        DispatchQueue.global(qos: .background).async {
+        DispatchQueue.global(qos: .userInitiated).async {
             var error: NSDictionary?
-            if let appleScript = NSAppleScript(source: script) {
-                appleScript.executeAndReturnError(&error)
+            if let s = NSAppleScript(source: script) {
+                s.executeAndReturnError(&error)
                 if let err = error {
-                    DispatchQueue.main.async {
-                        self.showAlert("Ошибка запуска: \(err["NSAppleScriptErrorMessage"] ?? err)")
-                    }
+                    let msg = (err["NSAppleScriptErrorMessage"] as? String) ?? "\(err)"
+                    DispatchQueue.main.async { self.showAlert("Ошибка запуска:\n\(msg)") }
                 }
             }
         }
     }
 
     func stopVPN() {
-        let script = "do shell script \"launchctl unload '\(plistPath)' 2>/dev/null; rm -f '\(plistPath)'\" with administrator privileges"
+        let script = """
+        do shell script "launchctl unload '\(sysPlistPath)' 2>/dev/null; rm -f '\(sysPlistPath)'" with administrator privileges
+        """
         var err: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&err)
     }
 
-    private func showAlert(_ message: String) {
-        let alert = NSAlert()
-        alert.messageText = "V2RayBox"
-        alert.informativeText = message
-        alert.runModal()
+    private func showAlert(_ msg: String) {
+        DispatchQueue.main.async {
+            let a = NSAlert()
+            a.messageText = "V2RayBox"
+            a.informativeText = msg
+            a.runModal()
+        }
     }
 }
