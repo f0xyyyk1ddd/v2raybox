@@ -1,0 +1,29 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build with Make
+      run: make
+
+    - name: Archive the App
+      run: |
+        curl -sL https://github.com/SagerNet/sing-box/releases/download/v1.9.3/sing-box-1.9.3-darwin-amd64.tar.gz | tar -xz
+        mkdir -p v2raybox.app/Contents/Resources
+        mv sing-box-*/sing-box v2raybox.app/Contents/Resources/
+        zip -r v2raybox.zip v2raybox.app
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: v2raybox-macos
+        path: v2raybox.zip
