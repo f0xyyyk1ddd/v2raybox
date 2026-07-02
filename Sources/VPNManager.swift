@@ -75,6 +75,14 @@ class VPNManager {
             "log": {
                 "level": "info"
             },
+            "dns": {
+                "servers": [
+                    {
+                        "address": "8.8.8.8",
+                        "detour": "direct"
+                    }
+                ]
+            },
             "inbounds": [
                 \(tunInbound)
             ],
