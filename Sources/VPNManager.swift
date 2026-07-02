@@ -117,8 +117,8 @@ class VPNManager {
             
             let corePath = Bundle.main.path(forResource: "sing-box", ofType: nil) ?? "/usr/local/bin/sing-box"
             
-            // Снимаем карантин, даем права на исполнение и запускаем через nohup отвязанным от shell-сессии
-            let script = "do shell script \"xattr -cr '\(corePath)'; chmod +x '\(corePath)'; nohup '\(corePath)' run -c '\(configPath)' > /tmp/sing-box.log 2>&1 </dev/null &\" with administrator privileges"
+            // Запуск без nohup, но с перенаправлением ввода-вывода (</dev/null)
+            let script = "do shell script \"xattr -cr '\(corePath)'; chmod +x '\(corePath)'; '\(corePath)' run -c '\(configPath)' > /tmp/sing-box.log 2>&1 </dev/null &\" with administrator privileges"
             
             DispatchQueue.global(qos: .background).async {
                 var error: NSDictionary?
