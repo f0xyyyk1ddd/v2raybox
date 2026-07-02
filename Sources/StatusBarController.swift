@@ -10,12 +10,12 @@ class StatusBarController {
     
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        menu = NSMenu()
+        serversMenu = NSMenu()
         
         if let button = statusItem.button {
             button.title = "V2Box"
         }
-        
-        menu = NSMenu()
         
         let connectItem = NSMenuItem(title: "Connect", action: #selector(toggleConnection(_:)), keyEquivalent: "")
         connectItem.target = self
@@ -24,7 +24,6 @@ class StatusBarController {
         menu.addItem(NSMenuItem.separator())
         
         let serversItem = NSMenuItem(title: "Servers", action: nil, keyEquivalent: "")
-        serversMenu = NSMenu()
         serversItem.submenu = serversMenu
         menu.addItem(serversItem)
         
@@ -99,7 +98,6 @@ class StatusBarController {
             emptyItem.isEnabled = false
             serversMenu.addItem(emptyItem)
         } else {
-            // Select the first one by default if none selected
             if currentProfileIndex == -1 {
                 currentProfileIndex = 0
                 serversMenu.items.first?.state = .on
@@ -112,7 +110,6 @@ class StatusBarController {
         updateServersMenu()
         
         if isConnected {
-            // Restart connection with new server
             VPNManager.shared.stopVPN()
             let profile = ProfileManager.shared.profiles[currentProfileIndex]
             VPNManager.shared.startVPN(profile: profile)
