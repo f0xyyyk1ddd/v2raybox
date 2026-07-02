@@ -74,7 +74,7 @@ class StatusBarController {
                 if let profile = LinkParser.parse(link: string) {
                     ProfileManager.shared.addProfile(profile)
                     updateServersMenu()
-                    print("Added profile: \\(profile.name)")
+                    print("Added profile: \(profile.name)")
                 }
             }
         }
