@@ -1,0 +1,139 @@
+import Foundation
+import Cocoa
+
+class VPNManager {
+    static let shared = VPNManager()
+    
+    private var process: Process?
+    
+    // Generates sing-box config JSON string
+    private func generateConfig(for profile: Profile) -> String {
+        let tunInbound = """
+        {
+            "type": "tun",
+            "tag": "tun-in",
+            "interface_name": "utun233",
+            "inet4_address": "172.19.0.1/30",
+            "auto_route": true,
+            "strict_route": true,
+            "stack": "system",
+            "sniff": true
+        }
+        """
+        
+        var outbounds = ""
+        
+        if profile.protocolName == "vless" {
+            outbounds = """
+            {
+                "type": "vless",
+                "tag": "proxy",
+                "server": "\(profile.address)",
+                "server_port": \(profile.port),
+                "uuid": "\(profile.uuid ?? "")",
+                "tls": {
+                    "enabled": true,
+                    "server_name": "\(profile.sni ?? profile.address)"
+                }
+            }
+            """
+        } else if profile.protocolName.hasPrefix("hysteria") {
+            outbounds = """
+            {
+                "type": "\(profile.protocolName)",
+                "tag": "proxy",
+                "server": "\(profile.address)",
+                "server_port": \(profile.port),
+                "up_mbps": 100,
+                "down_mbps": 100,
+                "auth_str": "\(profile.password ?? "")",
+                "tls": {
+                    "enabled": true,
+                    "server_name": "\(profile.sni ?? profile.address)",
+                    "insecure": false
+                }
+            }
+            """
+        } else if profile.protocolName == "trojan" {
+            outbounds = """
+            {
+                "type": "trojan",
+                "tag": "proxy",
+                "server": "\(profile.address)",
+                "server_port": \(profile.port),
+                "password": "\(profile.password ?? "")",
+                "tls": {
+                    "enabled": true,
+                    "server_name": "\(profile.sni ?? profile.address)"
+                }
+            }
+            """
+        }
+        
+        let config = """
+        {
+            "log": {
+                "level": "info"
+            },
+            "inbounds": [
+                \(tunInbound)
+            ],
+            "outbounds": [
+                \(outbounds),
+                {
+                    "type": "direct",
+                    "tag": "direct"
+                }
+            ],
+            "route": {
+                "rules": [
+                    {
+                        "protocol": "dns",
+                        "outbound": "direct"
+                    }
+                ],
+                "auto_detect_interface": true
+            }
+        }
+        """
+        
+        return config
+    }
+    
+    func startVPN(profile: Profile) {
+        let configString = generateConfig(for: profile)
+        let configPath = "/tmp/v2raybox_config.json"
+        
+        do {
+            try configString.write(toFile: configPath, atomically: true, encoding: .utf8)
+            
+            // To run TUN on macOS, root privileges are required.
+            // For this implementation, we use AppleScript to prompt for password and run sing-box as admin.
+            let corePath = Bundle.main.path(forResource: "sing-box", ofType: nil) ?? "/usr/local/bin/sing-box"
+            
+            let script = "do shell script \\"\\(corePath) run -c \\(configPath)\\" with administrator privileges"
+            
+            DispatchQueue.global(qos: .background).async {
+                var error: NSDictionary?
+                if let appleScript = NSAppleScript(source: script) {
+                    appleScript.executeAndReturnError(&error)
+                    if let err = error {
+                        print("Failed to start VPN: \\(err)")
+                    }
+                }
+            }
+            
+        } catch {
+            print("Failed to write config: \\(error)")
+        }
+    }
+    
+    func stopVPN() {
+        // Kill the sing-box process
+        let script = "do shell script \\"killall sing-box\\" with administrator privileges"
+        var error: NSDictionary?
+        if let appleScript = NSAppleScript(source: script) {
+            appleScript.executeAndReturnError(&error)
+        }
+    }
+}
