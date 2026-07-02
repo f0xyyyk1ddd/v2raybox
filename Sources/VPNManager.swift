@@ -107,30 +107,27 @@ class VPNManager {
         do {
             try configString.write(toFile: configPath, atomically: true, encoding: .utf8)
             
-            // To run TUN on macOS, root privileges are required.
-            // For this implementation, we use AppleScript to prompt for password and run sing-box as admin.
             let corePath = Bundle.main.path(forResource: "sing-box", ofType: nil) ?? "/usr/local/bin/sing-box"
             
-            let script = "do shell script \\"\\(corePath) run -c \\(configPath)\\" with administrator privileges"
+            let script = "do shell script \"\(corePath) run -c \(configPath)\" with administrator privileges"
             
             DispatchQueue.global(qos: .background).async {
                 var error: NSDictionary?
                 if let appleScript = NSAppleScript(source: script) {
                     appleScript.executeAndReturnError(&error)
                     if let err = error {
-                        print("Failed to start VPN: \\(err)")
+                        print("Failed to start VPN: \(err)")
                     }
                 }
             }
             
         } catch {
-            print("Failed to write config: \\(error)")
+            print("Failed to write config: \(error)")
         }
     }
     
     func stopVPN() {
-        // Kill the sing-box process
-        let script = "do shell script \\"killall sing-box\\" with administrator privileges"
+        let script = "do shell script \"killall sing-box\" with administrator privileges"
         var error: NSDictionary?
         if let appleScript = NSAppleScript(source: script) {
             appleScript.executeAndReturnError(&error)
