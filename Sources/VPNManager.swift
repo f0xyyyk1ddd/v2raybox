@@ -109,7 +109,8 @@ class VPNManager {
             
             let corePath = Bundle.main.path(forResource: "sing-box", ofType: nil) ?? "/usr/local/bin/sing-box"
             
-            let script = "do shell script \"\(corePath) run -c \(configPath)\" with administrator privileges"
+            // Снимаем карантин, даем права на исполнение и запускаем в фоне, перенаправляя логи
+            let script = "do shell script \"xattr -cr '\(corePath)'; chmod +x '\(corePath)'; '\(corePath)' run -c '\(configPath)' > /tmp/sing-box.log 2>&1 &\" with administrator privileges"
             
             DispatchQueue.global(qos: .background).async {
                 var error: NSDictionary?
@@ -127,6 +128,7 @@ class VPNManager {
     }
     
     func stopVPN() {
+        // Убиваем процесс
         let script = "do shell script \"killall sing-box\" with administrator privileges"
         var error: NSDictionary?
         if let appleScript = NSAppleScript(source: script) {
